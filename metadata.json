@@ -1,0 +1,6 @@
+{
+  "name": "Fish Bot Avanzado",
+  "description": "Bot de pesca avanzado con configuración visual.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
