@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Fish Bot Avanzado</string>
+    <string name="accessibility_service_description">Este servicio permite al bot ejecutar gestos (toques y deslizamientos) en la pantalla para automatizar tareas en el juego.</string>
 </resources>

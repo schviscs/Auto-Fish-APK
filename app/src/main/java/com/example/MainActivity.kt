@@ -42,6 +42,11 @@ import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 import com.example.smartAnalyzeRequest
 
+import android.content.Intent
+import android.provider.Settings
+import android.content.ComponentName
+import android.text.TextUtils
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,6 +67,54 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FishBotDashboard() {
+    val context = LocalContext.current
+    var hasOverlayPermission by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+    
+    // Function to check accessibility
+    fun isAccessibilityServiceEnabled(): Boolean {
+        var accessibilityEnabled = 0
+        try {
+            accessibilityEnabled = Settings.Secure.getInt(
+                context.contentResolver,
+                Settings.Secure.ACCESSIBILITY_ENABLED
+            )
+        } catch (e: Settings.SettingNotFoundException) {
+            e.printStackTrace()
+        }
+        val stringColonSplitter = TextUtils.SimpleStringSplitter(':')
+        if (accessibilityEnabled == 1) {
+            val settingValue = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            )
+            if (settingValue != null) {
+                stringColonSplitter.setString(settingValue)
+                while (stringColonSplitter.hasNext()) {
+                    val accessibilityService = stringColonSplitter.next()
+                    if (accessibilityService.equals(
+                            "${context.packageName}/${BotAccessibilityService::class.java.name}",
+                            ignoreCase = true
+                        )
+                    ) {
+                        return true
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    var hasAccessibilityPermission by remember { mutableStateOf(isAccessibilityServiceEnabled()) }
+
+    // Update permissions on focus
+    LaunchedEffect(Unit) {
+        while(true) {
+            hasOverlayPermission = Settings.canDrawOverlays(context)
+            hasAccessibilityPermission = isAccessibilityServiceEnabled()
+            delay(1000)
+        }
+    }
+
     val scrollState = rememberScrollState()
     var isRunning by remember { mutableStateOf(false) }
     var fishCaughtCount by remember { mutableStateOf(0) }
@@ -117,6 +170,21 @@ fun FishBotDashboard() {
                 onToggleBot = { isRunning = !isRunning }
             )
             
+            HorizontalDivider()
+
+            PermissionsCard(
+                hasOverlay = hasOverlayPermission,
+                hasAccessibility = hasAccessibilityPermission,
+                onRequestOverlay = {
+                    val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
+                    context.startActivity(intent)
+                },
+                onRequestAccessibility = {
+                    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                    context.startActivity(intent)
+                }
+            )
+
             HorizontalDivider()
 
             SmartAssistantCard()
@@ -560,6 +628,87 @@ fun MemorySettings() {
                     modifier = Modifier.weight(1f),
                     singleLine = true
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun PermissionsCard(
+    hasOverlay: Boolean,
+    hasAccessibility: Boolean,
+    onRequestOverlay: () -> Unit,
+    onRequestAccessibility: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(32.dp),
+        border = BorderStroke(1.dp, ImmersiveBorder),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Permisos del Sistema (Bot Nativo)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("Para poder simular toques tal como GramAddict desde la propia aplicación, requerimos estos permisos clave.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Overlay Permission
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (hasOverlay) Icons.Default.CheckCircle else Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = if (hasOverlay) Color.Green else Color.Yellow,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text("Ventana Flotante", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        Text("Botón In-game", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (!hasOverlay) {
+                    Button(onClick = onRequestOverlay) {
+                        Text("Activar")
+                    }
+                } else {
+                    Text("Activo", color = Color.Green, style = MaterialTheme.typography.labelMedium)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Accessibility Permission
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (hasAccessibility) Icons.Default.CheckCircle else Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = if (hasAccessibility) Color.Green else Color.Yellow,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text("Accesibilidad", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        Text("Simular Toques", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (!hasAccessibility) {
+                    Button(onClick = onRequestAccessibility) {
+                        Text("Activar")
+                    }
+                } else {
+                    Text("Activo", color = Color.Green, style = MaterialTheme.typography.labelMedium)
+                }
             }
         }
     }
