@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.bot.BotConfig
 import com.example.bot.BotRuntimeSnapshot
 import com.example.bot.FishBotEngine
+import com.example.capture.FrameSource
 import com.example.capture.NoOpFrameSource
 import com.example.data.BotConfigStore
 import com.example.vision.FallbackVisionAnalyzer
@@ -30,6 +31,10 @@ class FishBotViewModel(application: Application) : AndroidViewModel(application)
     private val _config = MutableStateFlow(BotConfig())
     val config: StateFlow<BotConfig> = _config.asStateFlow()
     val runtime: StateFlow<BotRuntimeSnapshot> = engine.snapshot
+    
+    // Track whether ScreenCaptureFrameSource is currently active
+    private val _isScreenCaptureActive = MutableStateFlow(false)
+    val isScreenCaptureActive: StateFlow<Boolean> = _isScreenCaptureActive.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -41,6 +46,8 @@ class FishBotViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _frameSource.collectLatest { newSource ->
                 engine.updateFrameSource(newSource)
+                // Update the tracking state whenever frameSource changes
+                _isScreenCaptureActive.value = newSource is ScreenCaptureFrameSource
             }
         }
     }
@@ -68,6 +75,8 @@ class FishBotViewModel(application: Application) : AndroidViewModel(application)
 
     fun setFrameSource(frameSource: FrameSource) {
         _frameSource.value = frameSource
+        // Update the tracking state
+        _isScreenCaptureActive.value = frameSource is ScreenCaptureFrameSource
     }
 
     override fun onCleared() {

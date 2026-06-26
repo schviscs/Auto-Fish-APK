@@ -75,6 +75,7 @@ import com.example.capture.NoOpFrameSource
 import com.example.capture.ScreenCaptureFrameSource
 import com.example.ui.theme.ImmersiveBorder
 import com.example.ui.theme.MyApplicationTheme
+import com.example.permissions.PermissionManager
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -83,28 +84,49 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
     private lateinit var mediaProjectionLauncher: ActivityResultLauncher<Intent>
     private lateinit var mediaProjectionPermissionController: MediaProjectionPermissionController
+    private lateinit var permissionManager: PermissionManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        mediaProjectionPermissionController = MediaProjectionPermissionController(this)
-        mediaProjectionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            if (it.resultCode == Activity.RESULT_OK) {
-                val viewModel: FishBotViewModel = (application as MyApplication).fishBotViewModel
-                viewModel.setFrameSource(ScreenCaptureFrameSource(this, it.resultCode, it.data!!))
-            } else {
-                // Handle permission denied, maybe show a message
+        // Initialize permission manager and request all required permissions
+        permissionManager = PermissionManager(this)
+        
+        // Request regular runtime permissions
+        permissionManager.requestRuntimePermissions { permissions ->
+            // After regular permissions, request special permissions
+            permissionManager.requestOverlayPermission { overlayGranted ->
+                if (!overlayGranted) {
+                    // Overlay permission not granted, but continue anyway
+                }
+                // Request accessibility permission
+                permissionManager.requestAccessibilityPermission { accessibilityGranted ->
+                    if (!accessibilityGranted) {
+                        // Accessibility permission not granted, but continue anyway
+                    }
+                }
             }
         }
 
+        mediaProjectionPermissionController = MediaProjectionPermissionController(this)
+        mediaProjectionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (it.resultCode == Activity.RESULT_OK && it.data != null) {
+                val viewModel: FishBotViewModel = (application as MyApplication).fishBotViewModel
+                viewModel.setFrameSource(ScreenCaptureFrameSource(this, it.resultCode, it.data!!))
+            } else {
+                // Handle permission denied or null data, maybe show a message
+            }
+        }
+
+        val viewModel = (application as MyApplication).fishBotViewModel
         setContent {
             MyApplicationTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    FishBotDashboard(mediaProjectionLauncher, mediaProjectionPermissionController)
+                    FishBotDashboard(mediaProjectionLauncher, mediaProjectionPermissionController, viewModel)
                 }
             }
         }
@@ -116,7 +138,7 @@ class MainActivity : ComponentActivity() {
 fun FishBotDashboard(
     mediaProjectionLauncher: ActivityResultLauncher<Intent>,
     mediaProjectionPermissionController: MediaProjectionPermissionController,
-    viewModel: FishBotViewModel = viewModel()
+    viewModel: FishBotViewModel
 ) {
     val context = LocalContext.current
     val runtime by viewModel.runtime.collectAsState()
@@ -136,7 +158,7 @@ fun FishBotDashboard(
         while (true) {
             hasOverlayPermission = Settings.canDrawOverlays(context)
             hasAccessibilityPermission = isAccessibilityServiceEnabled(context, context.packageName)
-            hasMediaProjectionPermission = viewModel.runtime.value.frameSource is ScreenCaptureFrameSource
+            hasMediaProjectionPermission = viewModel.isScreenCaptureActive.value
             delay(1_000L)
         }
     }
@@ -479,9 +501,3 @@ private fun isAccessibilityServiceEnabled(context: Context, packageName: String)
     return BotAccessibilityService.isReady
 }
 
-// Add a custom Application class to hold the ViewModel instance
-class MyApplication : Application() {
-    val fishBotViewModel: FishBotViewModel by lazy {
-        FishBotViewModel(this)
-    }
-}
