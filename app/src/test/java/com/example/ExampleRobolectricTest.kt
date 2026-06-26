@@ -13,9 +13,9 @@ import org.robolectric.annotation.Config
 class ExampleRobolectricTest {
 
   @Test
-  fun `read string from context`() {
+  fun `app name matches current branding`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val appName = context.getString(R.string.app_name)
-    assertEquals("My Application", appName)
+    assertEquals("Fish Bot Avanzado", appName)
   }
 }
