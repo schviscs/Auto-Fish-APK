@@ -23,7 +23,9 @@ class PermissionManager(private val activity: ComponentActivity) {
     private val _permissionsState = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     val permissionsState: StateFlow<Map<String, Boolean>> = _permissionsState.asStateFlow()
     
-    private var onPermissionsResult: ((Map<String, Boolean>) -> Unit)? = null
+    private var overlayCallback: ((Boolean) -> Unit)? = null
+    private var runtimePermissionsCallback: ((Map<String, Boolean>) -> Unit)? = null
+    private var accessibilityCallback: ((Boolean) -> Unit)? = null
 
     init {
         setupPermissionLaunchers()
@@ -34,28 +36,28 @@ class PermissionManager(private val activity: ComponentActivity) {
             ActivityResultContracts.RequestMultiplePermissions()
         ) { permissions ->
             _permissionsState.value = permissions
-            onPermissionsResult?.invoke(permissions)
+            runtimePermissionsCallback?.invoke(permissions)
         }
         
         overlaySettingsLauncher = activity.registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
         ) {
-            // Check if overlay permission was granted
+            // Check if overlay permission was granted after returning from settings
             val granted = canDrawOverlays()
-            onPermissionsResult?.invoke(mapOf(Manifest.permission.SYSTEM_ALERT_WINDOW to granted))
+            overlayCallback?.invoke(granted)
         }
         
         accessibilitySettingsLauncher = activity.registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
         ) {
-            // Check if accessibility service is enabled
+            // Check if accessibility service is enabled after returning from settings
             val granted = isAccessibilityServiceEnabled()
-            onPermissionsResult?.invoke(mapOf("ACCESSIBILITY_SERVICE" to granted))
+            accessibilityCallback?.invoke(granted)
         }
     }
 
     fun requestRuntimePermissions(callback: (Map<String, Boolean>) -> Unit) {
-        onPermissionsResult = callback
+        runtimePermissionsCallback = callback
         val permissionsToRequest = getRequiredPermissions()
             .filter { !isPermissionGranted(it) }
             .toTypedArray()
@@ -71,12 +73,12 @@ class PermissionManager(private val activity: ComponentActivity) {
     }
 
     fun requestOverlayPermission(callback: (Boolean) -> Unit) {
+        overlayCallback = callback
+        
         if (canDrawOverlays()) {
             callback(true)
             return
         }
-        
-        onPermissionsResult = { callback(it[Manifest.permission.SYSTEM_ALERT_WINDOW] ?: false) }
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val intent = Intent(
@@ -84,16 +86,19 @@ class PermissionManager(private val activity: ComponentActivity) {
                 Uri.parse("package:${activity.packageName}")
             )
             overlaySettingsLauncher.launch(intent)
+        } else {
+            // For older Android versions, check if permission is granted
+            callback(isPermissionGranted(Manifest.permission.SYSTEM_ALERT_WINDOW))
         }
     }
 
     fun requestAccessibilityPermission(callback: (Boolean) -> Unit) {
+        accessibilityCallback = callback
+        
         if (isAccessibilityServiceEnabled()) {
             callback(true)
             return
         }
-        
-        onPermissionsResult = { callback(it["ACCESSIBILITY_SERVICE"] ?: false) }
         
         val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
         accessibilitySettingsLauncher.launch(intent)

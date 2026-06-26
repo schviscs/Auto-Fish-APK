@@ -90,21 +90,16 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Initialize permission manager and request all required permissions
+        // Initialize permission manager and request all required permissions IMMEDIATELY
         permissionManager = PermissionManager(this)
         
-        // Request regular runtime permissions
-        permissionManager.requestRuntimePermissions { permissions ->
-            // After regular permissions, request special permissions
-            permissionManager.requestOverlayPermission { overlayGranted ->
-                if (!overlayGranted) {
-                    // Overlay permission not granted, but continue anyway
-                }
-                // Request accessibility permission
+        // Request overlay permission FIRST (most important for the bot)
+        permissionManager.requestOverlayPermission { overlayGranted ->
+            // After overlay, request runtime permissions
+            permissionManager.requestRuntimePermissions { permissions ->
+                // After runtime permissions, request accessibility
                 permissionManager.requestAccessibilityPermission { accessibilityGranted ->
-                    if (!accessibilityGranted) {
-                        // Accessibility permission not granted, but continue anyway
-                    }
+                    // All permissions requested
                 }
             }
         }
